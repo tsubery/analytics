@@ -54,6 +54,7 @@ import { Button } from '../../components/button'
 import { HoverAnnotationsList } from '../../annotations/hover-annotations-list'
 import { InteractiveAnnotationsList } from '../../annotations/interactive-annotations-list'
 import { tooltipClassName } from '../../util/tooltip'
+import { GraphSmoothing, movingAverage } from './smoothing'
 
 const height = 368
 const marginTop = 16
@@ -87,11 +88,13 @@ const initialTooltipState: TooltipState = {
 export const MainGraph = ({
   width,
   data,
-  annotations
+  annotations,
+  smoothing = 'none'
 }: {
   width: number
   data: MainGraphResponse
   annotations: Annotation[]
+  smoothing?: GraphSmoothing
 }) => {
   const site = useSiteContext()
   const user = useUserContext()
@@ -119,6 +122,8 @@ export const MainGraph = ({
   const metric = data.query.metrics[0] as Metric
   const interval = extractIntervalFromDimensions(data.query.dimensions)
   const isRealtime = data.extraContext.isRealtime
+  // The real-time dashboard has no graph options menu.
+  const activeSmoothing = isRealtime ? 'none' : smoothing
 
   const annotationsByDatetime = useMemo(
     () => groupAnnotationsByDatetime(annotations, interval),
@@ -127,7 +132,7 @@ export const MainGraph = ({
 
   useEffect(() => {
     setTooltip(initialTooltipState)
-  }, [data])
+  }, [data, activeSmoothing])
 
   useEffect(() => {
     const onClickOutside = (event: MouseEvent) => {
@@ -188,15 +193,27 @@ export const MainGraph = ({
     })
 
     let yMax = 1
+    const mainValues = movingAverage(
+      remappedData.map(({ main }) =>
+        main.isDefined ? main.numericValue : null
+      ),
+      activeSmoothing
+    )
+    const comparisonValues = movingAverage(
+      remappedData.map(({ comparison }) =>
+        comparison.isDefined ? comparison.numericValue : null
+      ),
+      activeSmoothing
+    )
 
     // can't be done in a single pass with remapAndFillData
     // because we need the xLabels formatting parameters to be known
     const remappedDataInGraphFormat = remappedData.map(
-      ({ main, comparison }, bucketIndex) => {
+      ({ main }, bucketIndex) => {
         const dataPoint = {
           values: [
-            comparison.isDefined ? comparison.numericValue : null,
-            main.isDefined ? main.numericValue : null
+            comparisonValues[bucketIndex],
+            mainValues[bucketIndex]
           ] as const,
           xLabel: main.isDefined
             ? getBucketLabel(main.timeLabel, {
@@ -214,12 +231,7 @@ export const MainGraph = ({
               })
             : ''
         }
-        if (main.isDefined && main.numericValue > yMax) {
-          yMax = main.numericValue
-        }
-        if (comparison.isDefined && comparison.numericValue > yMax) {
-          yMax = comparison.numericValue
-        }
+        yMax = Math.max(yMax, ...dataPoint.values.map((v) => v ?? 0))
         return dataPoint
       }
     )
@@ -299,7 +311,8 @@ export const MainGraph = ({
     isRealtime,
     primaryGradient,
     secondaryGradient,
-    metric
+    metric,
+    activeSmoothing
   ])
 
   const annotationsByIndex = useMemo(
@@ -511,6 +524,7 @@ export const MainGraph = ({
           persistent={tooltip.persistent}
           tooltipRef={tooltipRef}
           isTouchDevice={isTouchDevice}
+          smoothing={activeSmoothing}
         >
           {tooltip.persistent ? (
             <PersistentTooltipContents
@@ -651,6 +665,7 @@ const mainGraphTooltipClassName = tooltipClassName({
 })
 
 type MainGraphTooltipProps = {
+  smoothing: GraphSmoothing
   metric: Metric
   getFormattedValue: (value: MetricValue) => string
   interval: Interval
@@ -672,6 +687,7 @@ type MainGraphTooltipProps = {
 }
 
 const MainGraphTooltip = ({
+  smoothing,
   metric,
   getFormattedValue,
   interval,
@@ -726,6 +742,11 @@ const MainGraphTooltip = ({
             />
           )}
         </div>
+        {smoothing !== 'none' && (
+          <div className="text-xs text-gray-300 dark:text-gray-400">
+            {`${smoothing}-period moving average shown. Values are per period.`}
+          </div>
+        )}
         <div className="flex flex-col">
           {main.isDefined && (
             <div className="flex flex-row justify-between items-center">
