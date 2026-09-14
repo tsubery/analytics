@@ -1,8 +1,8 @@
 name: Add preview environment URL to PR
 
+# Disabled in forks: the preview environment belongs to plausible.io.
 on:
-  pull_request:
-    types: [labeled]
+  workflow_dispatch:
 
 permissions:
    pull-requests: write
@@ -12,7 +12,7 @@ env:
 
 jobs:
   comment:
-    if: ${{ contains(github.event.pull_request.labels.*.name, 'preview') }}
+    if: ${{ false }}
     runs-on: ubuntu-latest
     steps:
       - name: Comment with preview URL

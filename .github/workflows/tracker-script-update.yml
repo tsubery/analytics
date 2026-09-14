@@ -1,14 +1,12 @@
 name: "Tracker script update"
 
+# Disabled in forks: this uses the upstream bot to modify tracker pull requests.
 on:
-  pull_request:
-    paths:
-      - 'tracker/src/**'
-      - 'tracker/package.json'
-      - 'tracker/package-lock.json'
+  workflow_dispatch:
 
 jobs:
   tracker-script-update:
+    if: ${{ false }}
     runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       pull-requests: write
