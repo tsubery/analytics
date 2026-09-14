@@ -1,9 +1,8 @@
 name: "Tracker: publish NPM release"
 
+# Disabled in forks: this publishes the shared tracker package to NPM.
 on:
-  pull_request:
-    branches: [master]
-    types: [closed]
+  workflow_dispatch:
 
 jobs:
   tracker-release-npm:
@@ -14,11 +13,7 @@ jobs:
       pull-requests: read
       contents: read
       id-token: write
-    if: >-
-      ${{ github.event.pull_request.merged == true && (
-      contains(github.event.pull_request.labels.*.name, 'tracker-release: patch') ||
-      contains(github.event.pull_request.labels.*.name, 'tracker-release: minor') ||
-      contains(github.event.pull_request.labels.*.name, 'tracker-release: major') ) }}
+    if: ${{ false }}
 
     steps:
       - name: Checkout the repository

@@ -1,14 +1,8 @@
 name: "Terraform E2E Tests"
 
+# Disabled in forks: this manages the upstream Checkly/Terraform environment.
 on:
-  push:
-    branches:
-      - master
-    paths:
-      - 'test/e2e/**.tf'
-  pull_request:
-    paths:
-      - 'test/e2e/**.tf'
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -16,6 +10,7 @@ concurrency:
 
 jobs:
   terraform:
+    if: ${{ false }}
     concurrency: terraform_checkly
     defaults:
       run:
