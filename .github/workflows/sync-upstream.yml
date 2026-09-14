@@ -1,0 +1,33 @@
+name: Sync upstream
+
+on:
+  schedule:
+    # Run every night at 02:00 UTC.
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+jobs:
+  merge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out master
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Merge upstream master
+        run: |
+          git remote add upstream https://github.com/plausible/analytics.git
+          git fetch --no-tags upstream master
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git merge --no-edit upstream/master
+          git push origin HEAD:master
