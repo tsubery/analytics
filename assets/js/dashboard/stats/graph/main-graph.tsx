@@ -524,6 +524,7 @@ export const MainGraph = ({
           tooltipRef={tooltipRef}
           isTouchDevice={isTouchDevice}
           smoothing={activeSmoothing}
+          plottedValues={remappedDataInGraphFormat[selectedIndex].values}
         >
           {tooltip.persistent ? (
             <PersistentTooltipContents
@@ -660,6 +661,7 @@ const mainGraphTooltipClassName =
 
 type MainGraphTooltipProps = {
   smoothing: GraphSmoothing
+  plottedValues: MainGraphYValues
   metric: Metric
   getFormattedValue: (value: MetricValue) => string
   interval: Interval
@@ -682,6 +684,7 @@ type MainGraphTooltipProps = {
 
 const MainGraphTooltip = ({
   smoothing,
+  plottedValues,
   metric,
   getFormattedValue,
   interval,
@@ -736,11 +739,6 @@ const MainGraphTooltip = ({
             />
           )}
         </div>
-        {smoothing !== 'none' && (
-          <div className="text-xs text-gray-300 dark:text-gray-400">
-            {`${smoothing}-period moving average shown. Values are per period.`}
-          </div>
-        )}
         <div className="flex flex-col">
           {main.isDefined && (
             <div className="flex flex-row justify-between items-center">
@@ -761,11 +759,17 @@ const MainGraphTooltip = ({
                   })}
                 </div>
               </div>
-              <div
-                data-testid="main-value"
-                className="font-bold whitespace-nowrap"
-              >
-                {getFormattedValue(main.value)}
+              <div className="text-right whitespace-nowrap">
+                <div data-testid="main-value" className="font-bold">
+                  {getFormattedValue(main.value)}
+                </div>
+                <SmoothedTooltipValue
+                  smoothing={smoothing}
+                  value={plottedValues[1]}
+                  originalValue={main.value}
+                  metric={metric}
+                  series={MainGraphSeriesName.main}
+                />
               </div>
             </div>
           )}
@@ -786,12 +790,17 @@ const MainGraphTooltip = ({
                   })}
                 </div>
               </div>
-              <div
-                data-testid="comparison-value"
-                className="font-bold whitespace-nowrap"
-              >
-                {' '}
-                {getFormattedValue(comparison.value)}
+              <div className="text-right whitespace-nowrap">
+                <div data-testid="comparison-value" className="font-bold">
+                  {getFormattedValue(comparison.value)}
+                </div>
+                <SmoothedTooltipValue
+                  smoothing={smoothing}
+                  value={plottedValues[0]}
+                  originalValue={comparison.value}
+                  metric={metric}
+                  series={MainGraphSeriesName.comparison}
+                />
               </div>
             </div>
           )}
@@ -799,6 +808,39 @@ const MainGraphTooltip = ({
         {children}
       </aside>
     </GraphTooltipWrapper>
+  )
+}
+
+const SmoothedTooltipValue = ({
+  smoothing,
+  value,
+  originalValue,
+  metric,
+  series
+}: {
+  smoothing: GraphSmoothing
+  value: number | null
+  originalValue: MetricValue
+  metric: Metric
+  series: MainGraphSeriesName
+}) => {
+  if (smoothing === 'none' || value === null) return null
+
+  // Revenue's API-formatted strings describe the original bucket, so format
+  // the plotted average using its currency instead.
+  const formattedValue =
+    originalValue !== null && typeof originalValue === 'object'
+      ? new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: originalValue.currency
+        }).format(value)
+      : MetricFormatterShort[metric](Number(value.toFixed(2)))
+
+  return (
+    <div className="text-xs text-gray-300 dark:text-gray-400">
+      {`${smoothing}-period MA: `}
+      <span data-testid={`${series}-smoothed-value`}>{formattedValue}</span>
+    </div>
   )
 }
 
