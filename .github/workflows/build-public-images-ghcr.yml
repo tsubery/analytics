@@ -1,8 +1,10 @@
 name: Build Public Images GHCR
 
 on:
+  workflow_dispatch:
   push:
     tags: ["v*"]
+    branches: ["master"]
 
 permissions:
   contents: read
@@ -114,6 +116,7 @@ jobs:
         with:
           images: ${{ env.GHCR_REPO }}
           tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
             type=semver,pattern={{version}},prefix=v
             type=semver,pattern={{major}}.{{minor}},prefix=v
             type=semver,pattern={{major}},prefix=v
