@@ -1,15 +1,21 @@
 name: Build Public Images GHCR
 
 on:
+  workflow_dispatch:
   push:
     tags: ["v*"]
+    branches: ["master"]
+
+permissions:
+  contents: read
+  packages: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
-  GHCR_REPO: ghcr.io/plausible/community-edition
+  GHCR_REPO: ghcr.io/tsubery/analytics
 
 jobs:
   build:
@@ -110,6 +116,7 @@ jobs:
         with:
           images: ${{ env.GHCR_REPO }}
           tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
             type=semver,pattern={{version}},prefix=v
             type=semver,pattern={{major}}.{{minor}},prefix=v
             type=semver,pattern={{major}},prefix=v
