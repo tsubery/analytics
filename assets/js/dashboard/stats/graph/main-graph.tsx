@@ -856,7 +856,7 @@ const SmoothedTooltipValues = ({
   const { window } = smoothingSettings(smoothing)
   return (
     <>
-      {(['min', 'average', 'max'] as const).map((method) => {
+      {(['min', 'average', 'median', 'max'] as const).map((method) => {
         const smoothed = smoothValues(
           values,
           smoothingSelection(window, method)

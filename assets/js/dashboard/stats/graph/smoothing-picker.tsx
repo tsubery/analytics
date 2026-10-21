@@ -4,6 +4,7 @@ import * as storage from '../../util/storage'
 import {
   GraphSmoothing,
   isGraphSmoothing,
+  isSmoothingWindow,
   smoothingSelection,
   smoothingSettings
 } from './smoothing'
@@ -58,26 +59,80 @@ export function SmoothingPicker({
           { value: '30', label: '30-period' }
         ]}
         selected={selectedSmoothing === 'none' ? 'none' : window}
-        onSelect={(value: 'none' | '7' | '30') =>
+        onSelect={(value) =>
           onSmoothingClick(
             value === 'none' ? 'none' : smoothingSelection(value, method)
           )
         }
       />
       {selectedSmoothing !== 'none' && (
-        <SegmentedControl
-          ariaLabel="Smoothing method"
-          options={[
-            { value: 'average', label: 'Average' },
-            { value: 'min', label: 'Min' },
-            { value: 'max', label: 'Max' }
-          ]}
-          selected={method}
-          onSelect={(value) =>
-            onSmoothingClick(smoothingSelection(window, value))
-          }
-        />
+        <>
+          <LookbackInput
+            key={window}
+            window={window}
+            onChange={(value) =>
+              onSmoothingClick(smoothingSelection(value, method))
+            }
+          />
+          <SegmentedControl
+            ariaLabel="Smoothing method"
+            options={[
+              { value: 'average', label: 'Average' },
+              { value: 'min', label: 'Min' },
+              { value: 'median', label: 'Median' },
+              { value: 'max', label: 'Max' }
+            ]}
+            selected={method}
+            onSelect={(value) =>
+              onSmoothingClick(smoothingSelection(window, value))
+            }
+          />
+        </>
       )}
     </div>
+  )
+}
+
+function LookbackInput({
+  window,
+  onChange
+}: {
+  window: `${number}`
+  onChange: (value: `${number}`) => void
+}) {
+  const [draft, setDraft] = useState<string>(window)
+  const normalized = String(Number(draft))
+  const valid = isSmoothingWindow(normalized)
+  const commit = () => {
+    if (isSmoothingWindow(normalized)) onChange(normalized)
+  }
+
+  return (
+    <label className="flex flex-wrap w-full items-center justify-between gap-2 text-sm text-gray-700 dark:text-gray-100">
+      Lookback (periods)
+      <input
+        type="number"
+        min="1"
+        max={Number.MAX_SAFE_INTEGER}
+        step="1"
+        required
+        value={draft}
+        aria-invalid={!valid}
+        className="w-16 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-800 text-sm"
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={commit}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            event.preventDefault()
+            commit()
+          }
+        }}
+      />
+      {!valid && (
+        <span className="block text-xs text-red-600">
+          Enter a positive whole number.
+        </span>
+      )}
+    </label>
   )
 }

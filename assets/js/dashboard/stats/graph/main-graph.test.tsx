@@ -255,8 +255,21 @@ test.each<{
   }
 )
 
-test.each(['7', '30', '7-min', '30-min', '7-max', '30-max'] as const)(
-  'shows min, average and max in order when plotting %s',
+test.each([
+  '7',
+  '30',
+  '7-min',
+  '30-min',
+  '7-max',
+  '30-max',
+  '7-median',
+  '30-median',
+  '14',
+  '14-min',
+  '14-median',
+  '14-max'
+] as const)(
+  'shows min, average, median and max in order when plotting %s',
   (smoothing) => {
     render(
       <MainGraph
@@ -278,16 +291,19 @@ test.each(['7', '30', '7-min', '30-min', '7-max', '30-max'] as const)(
       expect(rows.map((row) => row.getAttribute('data-testid'))).toEqual([
         `${series}-smoothed-min`,
         `${series}-smoothed-average`,
+        `${series}-smoothed-median`,
         `${series}-smoothed-max`
       ])
       expect(rows.map((row) => row.textContent)).toEqual([
         '0',
+        average,
         average,
         maximum
       ])
     }
     expect(screen.getAllByText(`${window}-period min:`)).toHaveLength(2)
     expect(screen.getAllByText(`${window}-period average:`)).toHaveLength(2)
+    expect(screen.getAllByText(`${window}-period median:`)).toHaveLength(2)
     expect(screen.getAllByText(`${window}-period max:`)).toHaveLength(2)
     const plottedValues = smoothing.endsWith('-min')
       ? [0, 0]
@@ -297,3 +313,42 @@ test.each(['7', '30', '7-min', '30-min', '7-max', '30-max'] as const)(
     expect(graphProps().data[1].values).toEqual(plottedValues)
   }
 )
+
+test('uses the custom lookback for the plotted median and all tooltip summaries', () => {
+  render(
+    <MainGraph
+      width={800}
+      data={response}
+      annotations={[]}
+      smoothing="2-median"
+    />,
+    { wrapper: TestContextProviders }
+  )
+  hoverBucket(2)
+  expect(graphProps().data[2].values).toEqual([null, 10.5])
+  expect(screen.getByTestId('main-smoothed-min')).toHaveTextContent(/^0$/)
+  expect(screen.getByTestId('main-smoothed-average')).toHaveTextContent(
+    /^10.5$/
+  )
+  expect(screen.getByTestId('main-smoothed-median')).toHaveTextContent(/^10.5$/)
+  expect(screen.getByTestId('main-smoothed-max')).toHaveTextContent(/^21$/)
+  expect(
+    screen.queryByTestId('comparison-smoothed-median')
+  ).not.toBeInTheDocument()
+})
+
+test('uses the middle bucket for an odd median instead of the mean', () => {
+  render(
+    <MainGraph
+      width={800}
+      data={response}
+      annotations={[]}
+      smoothing="3-median"
+    />,
+    { wrapper: TestContextProviders }
+  )
+  hoverBucket(2)
+  expect(graphProps().data[2].values).toEqual([null, 0])
+  expect(screen.getByTestId('main-smoothed-median')).toHaveTextContent(/^0$/)
+  expect(screen.getByTestId('main-smoothed-average')).toHaveTextContent(/^7$/)
+})

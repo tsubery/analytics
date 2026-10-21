@@ -1,9 +1,9 @@
-type SmoothingWindow = '7' | '30'
-export type SmoothingMethod = 'average' | 'min' | 'max'
+type SmoothingWindow = `${number}`
+export type SmoothingMethod = 'average' | 'min' | 'median' | 'max'
 export type GraphSmoothing =
   | 'none'
   | SmoothingWindow
-  | `${SmoothingWindow}-${'min' | 'max'}`
+  | `${SmoothingWindow}-${'min' | 'median' | 'max'}`
 
 export function smoothingSettings(smoothing: Exclude<GraphSmoothing, 'none'>) {
   const [window, method = 'average'] = smoothing.split('-')
@@ -20,10 +20,22 @@ export function smoothingSelection(
   return method === 'average' ? window : `${window}-${method}`
 }
 
+export function isSmoothingWindow(value: string): value is SmoothingWindow {
+  const window = Number(value)
+  return Number.isSafeInteger(window) && window > 0 && String(window) === value
+}
+
 export function isGraphSmoothing(value: unknown): value is GraphSmoothing {
+  if (value === 'none') return true
+  if (typeof value !== 'string') return false
+  const [window, method, extra] = value.split('-')
   return (
-    typeof value === 'string' &&
-    ['none', '7', '30', '7-min', '30-min', '7-max', '30-max'].includes(value)
+    isSmoothingWindow(window) &&
+    extra === undefined &&
+    (method === undefined ||
+      method === 'min' ||
+      method === 'median' ||
+      method === 'max')
   )
 }
 
@@ -47,23 +59,57 @@ export function smoothValues(
   const window = Number(size)
   let sum = 0
   let start = 0
+  const sorted: number[] = []
+  const candidates: number[] = []
+  let head = 0
 
   return values.map((value, index) => {
     if (value === null) {
       sum = 0
+      sorted.length = 0
+      candidates.length = 0
+      head = 0
       start = index + 1
       return null
     }
 
     sum += value
     if (index - start >= window) {
-      sum -= values[start]!
+      const expired = values[start]!
+      sum -= expired
+      if (method === 'median') sorted.splice(lowerBound(sorted, expired), 1)
       start++
     }
     if (method === 'average') return sum / (index - start + 1)
 
-    // Windows contain at most 30 buckets and never span a gap.
-    const buckets = values.slice(start, index + 1) as number[]
-    return method === 'min' ? Math.min(...buckets) : Math.max(...buckets)
+    if (method === 'median') {
+      sorted.splice(lowerBound(sorted, value), 0, value)
+      const middle = Math.floor(sorted.length / 2)
+      return sorted.length % 2 === 0
+        ? (sorted[middle - 1] + sorted[middle]) / 2
+        : sorted[middle]
+    }
+
+    // Keep only candidates that can still become the trailing extremum.
+    while (head < candidates.length && candidates[head] < start) head++
+    while (candidates.length > head) {
+      const last = values[candidates[candidates.length - 1]]!
+      if (method === 'min' ? last < value : last > value) break
+      candidates.pop()
+    }
+    candidates.push(index)
+    return values[candidates[head]]!
   })
+}
+
+// First position whose value is at least the target, including duplicates.
+function lowerBound(values: number[], target: number): number {
+  let start = 0
+  let end = values.length
+  while (start < end) {
+    const middle = Math.floor((start + end) / 2)
+    if (values[middle] < target) start = middle + 1
+    else end = middle
+  }
+  return start
 }
