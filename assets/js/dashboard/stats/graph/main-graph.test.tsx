@@ -133,7 +133,7 @@ test('does not apply a saved smoothing preference to the real-time graph', () =>
     [null, 0]
   ])
   hoverBucket(1)
-  expect(screen.queryByTestId('main-smoothed-value')).not.toBeInTheDocument()
+  expect(screen.queryByTestId('main-smoothed-average')).not.toBeInTheDocument()
 })
 
 test.each(['7', '30'] as const)(
@@ -150,16 +150,18 @@ test.each(['7', '30'] as const)(
     )
 
     hoverBucket(0)
-    expect(screen.getByTestId('main-smoothed-value')).toHaveTextContent('0')
+    expect(screen.getByTestId('main-smoothed-average')).toHaveTextContent('0')
 
     hoverBucket(1)
     expect(screen.getByTestId('main-value')).toHaveTextContent('21')
     expect(screen.getByTestId('comparison-value')).toHaveTextContent('6')
-    expect(screen.getByTestId('main-smoothed-value')).toHaveTextContent('10.5')
-    expect(screen.getByTestId('comparison-smoothed-value')).toHaveTextContent(
+    expect(screen.getByTestId('main-smoothed-average')).toHaveTextContent(
+      '10.5'
+    )
+    expect(screen.getByTestId('comparison-smoothed-average')).toHaveTextContent(
       '3'
     )
-    expect(screen.getAllByText(`${smoothing}-period MA:`)).toHaveLength(2)
+    expect(screen.getAllByText(`${smoothing}-period average:`)).toHaveLength(2)
 
     act(() => {
       graphProps().onContextMenu?.({
@@ -170,7 +172,9 @@ test.each(['7', '30'] as const)(
         closestPoint: null
       })
     })
-    expect(screen.getByTestId('main-smoothed-value')).toHaveTextContent('10.5')
+    expect(screen.getByTestId('main-smoothed-average')).toHaveTextContent(
+      '10.5'
+    )
 
     rerender(
       <MainGraph
@@ -183,9 +187,11 @@ test.each(['7', '30'] as const)(
     expect(screen.queryByTestId('graph-tooltip')).not.toBeInTheDocument()
     hoverBucket(1)
     expect(screen.getByTestId('main-value')).toHaveTextContent('21')
-    expect(screen.queryByTestId('main-smoothed-value')).not.toBeInTheDocument()
     expect(
-      screen.queryByTestId('comparison-smoothed-value')
+      screen.queryByTestId('main-smoothed-average')
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByTestId('comparison-smoothed-average')
     ).not.toBeInTheDocument()
 
     rerender(
@@ -197,9 +203,9 @@ test.each(['7', '30'] as const)(
       />
     )
     hoverBucket(2)
-    expect(screen.getByTestId('main-smoothed-value')).toHaveTextContent('7')
+    expect(screen.getByTestId('main-smoothed-average')).toHaveTextContent('7')
     expect(
-      screen.queryByTestId('comparison-smoothed-value')
+      screen.queryByTestId('comparison-smoothed-average')
     ).not.toBeInTheDocument()
   }
 )
@@ -243,8 +249,51 @@ test.each<{
       { wrapper: TestContextProviders }
     )
     hoverBucket(2)
-    expect(screen.getByTestId('main-smoothed-value')).toHaveTextContent(
+    expect(screen.getByTestId('main-smoothed-average')).toHaveTextContent(
       expected
     )
+  }
+)
+
+test.each(['7', '30', '7-min', '30-min', '7-max', '30-max'] as const)(
+  'shows min, average and max in order when plotting %s',
+  (smoothing) => {
+    render(
+      <MainGraph
+        width={800}
+        data={response}
+        annotations={[]}
+        smoothing={smoothing}
+      />,
+      { wrapper: TestContextProviders }
+    )
+    hoverBucket(1)
+    expect(screen.getByTestId('main-value')).toHaveTextContent('21')
+    const window = smoothing.split('-')[0]
+    for (const [series, average, maximum] of [
+      ['main', '10.5', '21'],
+      ['comparison', '3', '6']
+    ]) {
+      const rows = screen.getAllByTestId(new RegExp(`^${series}-smoothed-`))
+      expect(rows.map((row) => row.getAttribute('data-testid'))).toEqual([
+        `${series}-smoothed-min`,
+        `${series}-smoothed-average`,
+        `${series}-smoothed-max`
+      ])
+      expect(rows.map((row) => row.textContent)).toEqual([
+        '0',
+        average,
+        maximum
+      ])
+    }
+    expect(screen.getAllByText(`${window}-period min:`)).toHaveLength(2)
+    expect(screen.getAllByText(`${window}-period average:`)).toHaveLength(2)
+    expect(screen.getAllByText(`${window}-period max:`)).toHaveLength(2)
+    const plottedValues = smoothing.endsWith('-min')
+      ? [0, 0]
+      : smoothing.endsWith('-max')
+        ? [6, 21]
+        : [3, 10.5]
+    expect(graphProps().data[1].values).toEqual(plottedValues)
   }
 )

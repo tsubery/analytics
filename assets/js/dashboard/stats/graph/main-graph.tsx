@@ -53,8 +53,13 @@ import { useUserContext } from '../../user-context'
 import { Button } from '../../components/button'
 import { HoverAnnotationsList } from '../../annotations/hover-annotations-list'
 import { InteractiveAnnotationsList } from '../../annotations/interactive-annotations-list'
+import {
+  GraphSmoothing,
+  smoothValues,
+  smoothingSettings,
+  smoothingSelection
+} from './smoothing'
 import { tooltipClassName } from '../../util/tooltip'
-import { GraphSmoothing, movingAverage } from './smoothing'
 
 const height = 368
 const marginTop = 16
@@ -193,13 +198,13 @@ export const MainGraph = ({
     })
 
     let yMax = 1
-    const mainValues = movingAverage(
+    const mainValues = smoothValues(
       remappedData.map(({ main }) =>
         main.isDefined ? main.numericValue : null
       ),
       activeSmoothing
     )
-    const comparisonValues = movingAverage(
+    const comparisonValues = smoothValues(
       remappedData.map(({ comparison }) =>
         comparison.isDefined ? comparison.numericValue : null
       ),
@@ -525,7 +530,19 @@ export const MainGraph = ({
           tooltipRef={tooltipRef}
           isTouchDevice={isTouchDevice}
           smoothing={activeSmoothing}
-          plottedValues={remappedDataInGraphFormat[selectedIndex].values}
+          windowData={
+            activeSmoothing === 'none'
+              ? []
+              : remappedData.slice(
+                  Math.max(
+                    0,
+                    selectedIndex -
+                      Number(smoothingSettings(activeSmoothing).window) +
+                      1
+                  ),
+                  selectedIndex + 1
+                )
+          }
         >
           {tooltip.persistent ? (
             <PersistentTooltipContents
@@ -667,7 +684,7 @@ const mainGraphTooltipClassName = tooltipClassName({
 
 type MainGraphTooltipProps = {
   smoothing: GraphSmoothing
-  plottedValues: MainGraphYValues
+  windowData: GraphDatum[]
   metric: Metric
   getFormattedValue: (value: MetricValue) => string
   interval: Interval
@@ -690,7 +707,7 @@ type MainGraphTooltipProps = {
 
 const MainGraphTooltip = ({
   smoothing,
-  plottedValues,
+  windowData,
   metric,
   getFormattedValue,
   interval,
@@ -769,9 +786,11 @@ const MainGraphTooltip = ({
                 <div data-testid="main-value" className="font-bold">
                   {getFormattedValue(main.value)}
                 </div>
-                <SmoothedTooltipValue
+                <SmoothedTooltipValues
                   smoothing={smoothing}
-                  value={plottedValues[1]}
+                  values={windowData.map(({ main }) =>
+                    main.isDefined ? main.numericValue : null
+                  )}
                   originalValue={main.value}
                   metric={metric}
                   series={MainGraphSeriesName.main}
@@ -800,9 +819,11 @@ const MainGraphTooltip = ({
                 <div data-testid="comparison-value" className="font-bold">
                   {getFormattedValue(comparison.value)}
                 </div>
-                <SmoothedTooltipValue
+                <SmoothedTooltipValues
                   smoothing={smoothing}
-                  value={plottedValues[0]}
+                  values={windowData.map(({ comparison }) =>
+                    comparison.isDefined ? comparison.numericValue : null
+                  )}
                   originalValue={comparison.value}
                   metric={metric}
                   series={MainGraphSeriesName.comparison}
@@ -817,36 +838,55 @@ const MainGraphTooltip = ({
   )
 }
 
-const SmoothedTooltipValue = ({
+const SmoothedTooltipValues = ({
   smoothing,
-  value,
+  values,
   originalValue,
   metric,
   series
 }: {
   smoothing: GraphSmoothing
-  value: number | null
+  values: (number | null)[]
   originalValue: MetricValue
   metric: Metric
   series: MainGraphSeriesName
 }) => {
-  if (smoothing === 'none' || value === null) return null
+  if (smoothing === 'none') return null
 
-  // Revenue's API-formatted strings describe the original bucket, so format
-  // the plotted average using its currency instead.
-  const formattedValue =
-    originalValue !== null && typeof originalValue === 'object'
-      ? new Intl.NumberFormat('en-US', {
-          style: 'currency',
-          currency: originalValue.currency
-        }).format(value)
-      : MetricFormatterShort[metric](Number(value.toFixed(2)))
-
+  const { window } = smoothingSettings(smoothing)
   return (
-    <div className="text-xs text-gray-300 dark:text-gray-400">
-      {`${smoothing}-period MA: `}
-      <span data-testid={`${series}-smoothed-value`}>{formattedValue}</span>
-    </div>
+    <>
+      {(['min', 'average', 'max'] as const).map((method) => {
+        const smoothed = smoothValues(
+          values,
+          smoothingSelection(window, method)
+        )
+        const value = smoothed[smoothed.length - 1]
+        if (value === null || value === undefined) return null
+
+        // Revenue's API-formatted strings describe the original bucket, so
+        // format each smoothed value using its currency instead.
+        const formattedValue =
+          originalValue !== null && typeof originalValue === 'object'
+            ? new Intl.NumberFormat('en-US', {
+                style: 'currency',
+                currency: originalValue.currency
+              }).format(value)
+            : MetricFormatterShort[metric](Number(value.toFixed(2)))
+
+        return (
+          <div
+            key={method}
+            className="text-xs text-gray-300 dark:text-gray-400"
+          >
+            {`${window}-period ${method}: `}
+            <span data-testid={`${series}-smoothed-${method}`}>
+              {formattedValue}
+            </span>
+          </div>
+        )
+      })}
+    </>
   )
 }
 
